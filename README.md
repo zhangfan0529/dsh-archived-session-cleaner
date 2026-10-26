@@ -2,118 +2,51 @@
 
 **English** · [中文](README.zh-CN.md)
 
-A DeepSeek Harness plugin bundle that **permanently deletes archived sessions** from the sidebar.
-
-## Why this exists
-
-DSH treats the session log as the only source of truth and ships no way to delete a
-session. Archiving only hides a session from the sidebar's grouping: its log stays on
-disk, in the archived filter, and in the workspace registry. Archived conversations
-accumulate and clutter the sidebar. This plugin adds the missing operation.
-
-## What it does
-
-- Adds **“Delete session permanently”** to the `...` menu of an **archived** session row.
-- Asks for confirmation first, and states exactly what will be removed — the session
-  plus the subagent logs recorded beneath it.
-- Deletes the stored session directory, its projection-cache entry, and the subagent
-  sessions under it.
-- Detaches the session from workspace accounting, drops it from the archive set, and
-  lets the sidebar remove the row immediately.
-- Exposes an agent tool, `delete_archived_sessions`, backed by the same implementation.
-  It takes exactly **one required `sessionId`** — there is no "delete all archived
-  sessions" mode for the agent.
+Permanently delete archived DeepSeek Harness sessions and their subagent logs.
 
 ![The permanent-delete confirmation dialog](assets/screenshot.png)
 
-Safety boundaries: only archived sessions can be deleted, a live session is refused,
-an id that is not archived is ignored, and deletion cannot be undone.
+## Features
 
-## Requirements
-
-- DeepSeek Harness 0.2.x with the Web UI (developed against `0.2.1-rc.3`).
-- The UI half is a web client plugin, so the profile must run the Web GUI.
+- "Delete session permanently" in the `...` menu of an archived session
+- Removes the session log, its projection cache, and its subagent logs; the row leaves the sidebar
+- Archived sessions only, with a confirmation step; deletion is permanent
+- Optional agent tool, `delete_archived_sessions` — one Session ID per call
 
 ## Install
 
-### From GitHub
-
-Settings → Plugins → Add, then paste:
+Settings → Plugins → Add:
 
 ```
 github:zhangfan0529/dsh-archived-session-cleaner
 ```
 
-or `git+https://github.com/zhangfan0529/dsh-archived-session-cleaner.git`.
+Refresh the page afterwards. For a local checkout, paste its absolute path instead, e.g. `/Users/you/plugins/dsh-archived-session-cleaner`.
 
-The installer requires approval and runs `pnpm`. The repository root must be this
-package — the directory containing the `package.json` with `dsh.bundle.patch`.
+Requires DeepSeek Harness 0.2.x with the Web UI.
 
-### From a local directory
+## Use
 
-Settings → Plugins → Add, with the absolute path to this directory:
+1. If the session is not archived yet, archive it first (`...` → Archive session)
+2. Switch the sidebar filter to "All conversations (show archived)"
+3. `...` → "Delete session permanently" → confirm
 
-```
-/Users/you/plugins/dsh-archived-session-cleaner
-```
-
-After installing, refresh the page once so the client bundle loads.
-
-## Usage
-
-1. Archive a session if it is not archived yet (its `...` menu → **Archive session**).
-2. Make archived sessions visible in the sidebar filter.
-3. Open the archived row's `...` menu → **Delete session permanently**.
-4. Confirm.
-
-Or ask the agent to delete one session. The tool requires that session's id (copy it from
-the archived row's `...` menu → **Copy Session ID**); the agent cannot delete every
-archived session in one call.
-
-## How it works
-
-- **Host half** ([index.js](index.js)) owns the deletion. It registers a package-owned
-  local route (`POST /dsh-plugin/archived-sessions`; browser calls are same-origin only,
-  and the route is not an authenticated API) for the client half and the
-  `delete_archived_sessions` tool for agents; both call one implementation.
-- **Client half** ([client.js](client.js)) registers the menu row and the confirmation
-  dialog in the sidebar. The dialog renders the harness `Modal`/`Button` primitives when
-  they are available, so it matches the shipped dialogs exactly, in light and dark mode,
-  with a local fallback when the private module is missing.
-- The route is local and loopback-only: no external network, no telemetry. The browser
-  cannot touch the filesystem, so the client half sends a command (`preview` or
-  `delete`) and the host performs it in-process.
-
-## What it removes
-
-- `$DSH_HOME/sessions/<project>/<sessionId>/` — the JSONL log and its artifacts
-- `$DSH_HOME/storages/session_projcache/sessions/<sessionId>.json`
-- subagent sessions recorded beneath the deleted session (`origin: "subagent"`)
-- the session's workspace accounting slot and its archive-set entry
-
-`$DSH_HOME` defaults to `~/.dsh`.
+To let the agent delete one, send it the Session ID from "Copy Session ID" in the archived row's menu.
 
 ## Notes
 
-- DSH 0.2.x has no public session-delete API, so this plugin implements the operation
-  against the storage layout above. A future version that changes that layout — or ships
-  its own delete API — may require updating or replacing this plugin.
-- The confirmation dialog prefers `@deepseek-ai/dsh-client-ui-primitives`, a private
-  client API. It can change between harness versions; if it does, the built-in fallback
-  renders instead.
-- No build step: plain ESM, no runtime dependencies.
+- Archived sessions only. A session that is running, or still loaded in the current app run, is skipped — restart the app, then delete again
+- Deletion is permanent
+- Runs entirely on this machine: no network requests, no telemetry
 
-## Files
+## What gets deleted
 
-| File | Purpose |
-| --- | --- |
-| `package.json` | Bundle manifest: `dsh.bundle.patch`, `dsh.client`, exports |
-| `cordis.patch.yml` | Loader patch that inserts the plugin row |
-| `index.js` | Host half: deletion, local route, agent tool |
-| `client.js` | Client half: menu row, confirmation dialog |
-| `locale/en.json`, `locale/zh.json` | Plugin list title and description |
-| `icon.svg` | Plugin list artwork |
-| `LICENSE` | MIT license |
+- `$DSH_HOME/sessions/<project>/<sessionId>/` (the JSONL log)
+- `$DSH_HOME/storages/session_projcache/sessions/<sessionId>.json`
+- the subagent session logs recorded under it
+- its workspace entry and archive-set entry
+
+`$DSH_HOME` defaults to `~/.dsh`.
 
 ## License
 
