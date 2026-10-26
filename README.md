@@ -1,5 +1,7 @@
 # Archived Session Cleaner
 
+**English** · [中文](README.zh-CN.md)
+
 A DeepSeek Harness plugin bundle that **permanently deletes archived sessions** from the sidebar.
 
 ## Why this exists

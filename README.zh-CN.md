@@ -1,5 +1,7 @@
 # 归档会话清理（Archived Session Cleaner）
 
+[English](README.md) · **中文**
+
 一个 DeepSeek Harness 插件包，用来**永久删除已归档的会话**。
 
 ## 为什么需要它
