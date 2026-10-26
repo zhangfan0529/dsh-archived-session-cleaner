@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Archived Session Cleaner",
+    "description": "Permanently delete archived sessions and the subagent logs beneath them, from the sidebar."
+  }
+}

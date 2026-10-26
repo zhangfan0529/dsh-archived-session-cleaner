@@ -1,0 +1,4 @@
+- insert:
+    - id: archived-session-cleaner
+      name: '@local/dsh-archived-session-cleaner'
+      config: {}

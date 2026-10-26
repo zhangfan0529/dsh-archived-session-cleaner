@@ -1,0 +1,46 @@
+{
+  "name": "@local/dsh-archived-session-cleaner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Permanently delete archived sessions and their subagent logs from the sidebar.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhangfan0529/dsh-archived-session-cleaner.git"
+  },
+  "homepage": "https://github.com/zhangfan0529/dsh-archived-session-cleaner#readme",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "assets/*",
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-0 <0.3.0-0"
+  }
+}
