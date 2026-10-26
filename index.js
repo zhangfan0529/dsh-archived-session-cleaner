@@ -198,9 +198,42 @@ async function collectPlan(ctx, requestedIds) {
   const { targets, ignored } = selectTargets(archived, ids)
   const snapshots = await persistence.list()
   const live = new Set((ctx.get('sessions')?.list() ?? []).map((session) => String(session.id)))
+  const running = new Set()
+  const agents = ctx.get('agents')
+  if (agents !== undefined) {
+    for (const id of live) {
+      let status
+      try {
+        status = agents.get(id)?.status
+      } catch {
+        status = undefined
+      }
+      if (status === 'running') running.add(id)
+    }
+  }
   const families = new Map()
   for (const target of targets) families.set(target, subagentDescendants(snapshots, [target]))
-  return { registry, persistence, archived, targets, families, ignored, live }
+  return { registry, persistence, archived, targets, families, ignored, live, running }
+}
+
+/**
+ * Why a Session blocks its own deletion.
+ *
+ * Two states refuse a delete, and they are not the same thing: `running` when
+ * the Session's Agent is inside a turn, `resident` when the Host merely keeps
+ * the Session loaded in this process. DSH 0.2.x has no per-Session close API,
+ * so a Session this app run opened — or archived while it was open — stays in
+ * memory until the app exits. Removing the log underneath a loaded Session
+ * could let a later flush write it back, so a resident Session is refused too;
+ * the caller must restart the app to release it.
+ * @param plan - the collected plan.
+ * @param id - Session id.
+ * @returns the blocking reason, or undefined when the log is free to remove.
+ */
+function blockingReason(plan, id) {
+  if (plan.running.has(id)) return 'running'
+  if (plan.live.has(id)) return 'resident'
+  return undefined
 }
 
 /**
@@ -212,17 +245,23 @@ async function collectPlan(ctx, requestedIds) {
 export async function previewArchivedSessions(ctx, requestedIds) {
   const plan = await collectPlan(ctx, requestedIds)
   let subagents = 0
-  let live = 0
+  let running = 0
+  let resident = 0
   for (const target of plan.targets) {
     const family = [target, ...(plan.families.get(target) ?? [])]
     subagents += family.length - 1
-    live += family.filter((id) => plan.live.has(id)).length
+    for (const id of family) {
+      const reason = blockingReason(plan, id)
+      if (reason === 'running') running += 1
+      else if (reason === 'resident') resident += 1
+    }
   }
   return {
     archived: plan.archived.length,
     targets: plan.targets.length,
     subagents,
-    live,
+    running,
+    resident,
     ignored: plan.ignored,
   }
 }
@@ -230,9 +269,11 @@ export async function previewArchivedSessions(ctx, requestedIds) {
 /**
  * Permanently delete archived Sessions (and their subagent logs).
  *
- * A Session whose live Agent still exists is refused; nothing is written for
- * it. A stored log that is already gone is treated as already deleted, and
- * its registry entries are still cleaned up.
+ * A Session whose Agent is running is refused, and so is a Session the Host
+ * still holds in memory from this app run (`resident`): the app must restart
+ * to release it. Nothing is written for a refused Session. A stored log that
+ * is already gone is treated as already deleted, and its registry entries are
+ * still cleaned up.
  * @param ctx - plugin context.
  * @param requestedIds - normalized requested ids.
  * @returns the per-id outcome.
@@ -247,9 +288,9 @@ export async function deleteArchivedSessions(ctx, requestedIds) {
 
   for (const target of plan.targets) {
     const family = [target, ...(plan.families.get(target) ?? [])]
-    const running = family.filter((id) => plan.live.has(id))
-    if (running.length > 0) {
-      skipped.push({ id: target, reason: 'live' })
+    const blocked = family.map((id) => blockingReason(plan, id)).filter((reason) => reason !== undefined)
+    if (blocked.length > 0) {
+      skipped.push({ id: target, reason: blocked.includes('running') ? 'running' : 'resident' })
       continue
     }
     const removedHere = []
@@ -424,7 +465,7 @@ export function apply(ctx) {
         toolCtx.tools.register({
           name: 'delete_archived_sessions',
           description:
-            'Permanently delete ONE archived session from disk and from the workspace registry. sessionId is required and must be the exact id the user provided — this tool never deletes every archived session at once, and an id must never be guessed. Only archived sessions can be deleted: a live session is refused, and an id that is not archived is ignored. Subagent session logs recorded beneath the session are deleted with it; forks and other sessions are never touched. This is irreversible.',
+            'Permanently delete ONE archived session from disk and from the workspace registry. sessionId is required and must be the exact id the user provided — this tool never deletes every archived session at once, and an id must never be guessed. Only archived sessions can be deleted: a session whose agent is running is refused, and so is a session this app still holds in memory (the user must restart the app to release it); an id that is not archived is ignored. Subagent session logs recorded beneath the session are deleted with it; forks and other sessions are never touched. This is irreversible.',
           parameters: {
             type: 'object',
             additionalProperties: false,

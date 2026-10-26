@@ -42,7 +42,10 @@ window.__ModuleLoader__.load({
       'dialog.title': '永久删除归档会话？',
       'dialog.single': '“{title}”将被永久删除。此操作无法撤销。',
       'dialog.subagents': '同时删除 {m} 个子智能体会话日志。',
-      'dialog.live': '其中 {n} 个正在运行，会被跳过。',
+      'dialog.liveRunning': '其中 {n} 个正在运行，会被跳过。',
+      'dialog.resident': '其中 {n} 个仍在本机内存中，已跳过；重启 App 后可删除。',
+      'reason.running': '正在运行',
+      'reason.resident': '仍在内存中，重启 App 后可删除',
       'dialog.nothing': '没有可删除的归档会话。',
       'dialog.cancel': '取消',
       'dialog.confirm': '永久删除',
@@ -59,7 +62,10 @@ window.__ModuleLoader__.load({
       'dialog.title': 'Permanently delete archived session?',
       'dialog.single': '“{title}” will be permanently deleted. This cannot be undone.',
       'dialog.subagents': '{m} subagent session log(s) will be deleted too.',
-      'dialog.live': '{n} of them are running and will be skipped.',
+      'dialog.liveRunning': '{n} of them are running and will be skipped.',
+      'dialog.resident': '{n} of them are still loaded in this app run and were skipped; restart the app to delete them.',
+      'reason.running': 'running',
+      'reason.resident': 'still loaded — restart the app to delete',
       'dialog.nothing': 'There is no archived session to delete.',
       'dialog.cancel': 'Cancel',
       'dialog.confirm': 'Delete permanently',
@@ -303,6 +309,12 @@ window.__ModuleLoader__.load({
       const nothingToDo = state.phase === 'ready' && preview.targets === 0
       const done = state.phase === 'done'
       const partial = done && state.result.skipped.length + state.result.failed.length > 0
+      const reasonLabel = (reason) =>
+        reason === 'running'
+          ? t('reason.running')
+          : reason === 'resident' || reason === 'live'
+            ? t('reason.resident')
+            : reason
 
       let description
       let notes = []
@@ -313,7 +325,7 @@ window.__ModuleLoader__.load({
           : t('dialog.done', { n: state.result.deleted.length })
         if (partial) {
           notes = [
-            [...state.result.skipped.map((entry) => `${entry.id} (${entry.reason})`), ...state.result.failed.map((entry) => `${entry.id} (${entry.error})`)].join('\n'),
+            [...state.result.skipped.map((entry) => `${entry.id} (${reasonLabel(entry.reason)})`), ...state.result.failed.map((entry) => `${entry.id} (${entry.error})`)].join('\n'),
           ]
         }
       } else if (nothingToDo) {
@@ -324,7 +336,14 @@ window.__ModuleLoader__.load({
         else if (state.phase === 'running') notes = [t('dialog.running')]
         else if (state.phase === 'ready') {
           if (preview.subagents > 0) notes.push(t('dialog.subagents', { m: preview.subagents }))
-          if (preview.live > 0) notes.push(t('dialog.live', { n: preview.live }))
+          const running = preview.running ?? 0
+          const resident = preview.resident ?? 0
+          const legacyLive = preview.live ?? 0
+          if (running > 0) notes.push(t('dialog.liveRunning', { n: running }))
+          if (resident > 0) notes.push(t('dialog.resident', { n: resident }))
+          // A Host that predates the split reports one `live` count; after the
+          // app restarts the two reasons arrive separately.
+          if (resident === 0 && running === 0 && legacyLive > 0) notes.push(t('dialog.resident', { n: legacyLive }))
         } else if (state.phase === 'error') {
           errorText = t('dialog.failed', { message: state.message })
         }
